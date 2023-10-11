@@ -8,6 +8,8 @@ if vim.g.vscode then
 	ACCELERATION_TABLE_VERTICAL = { 7, 14, 20, 26 }
 end
 
+local prev_col = 0
+
 ---VSCode's cursorMove
 ---@param direction "j" | "k"
 ---@param step integer
@@ -16,6 +18,8 @@ local function vscode_move(direction, step)
 	local to, by
 	local value = step
 	local curr_lnum = fn.line(".")
+	local curr_col = fn.col(".")
+	col = math.max(curr_col, prev_col)
 	if direction == "j" then
 		to = "down"
 		by = "wrappedLine"
@@ -29,6 +33,12 @@ local function vscode_move(direction, step)
 	end
 	if value > 0 then
 		fn.VSCodeNotify("cursorMove", { to = to, by = by, value = step })
+		-- Move cursor to the correct column in vscode when moveing across blank lines
+		if fn.col(".") < col then
+			line_len = fn.col("$")
+			right_step = math.min(line_len - curr_col, col - curr_col)
+			fn.VSCodeNotify("cursorMove", { to = "right", by = "character", value = right_step })
+		end
 	end
 	return "<esc>" -- ! need this to clear v:count in vscode
 end
@@ -89,6 +99,9 @@ local function move(direction)
 
 	local is_normal = api.nvim_get_mode().mode:lower() == "n"
 	local use_vscode = vim.g.vscode and is_normal and direction ~= "h" and direction ~= "l"
+	-- if "h" or "l", update prev_col
+	if direction == "h" then
+		prev_col = fn.col(".")
 
 	if vim.v.count > 0 then
 		if use_vscode then
@@ -107,6 +120,7 @@ local function move(direction)
 end
 
 local function setup()
+	prev_col = fn.col(".")
 	for _, motion in ipairs({ "h", "j", "k", "l" }) do
 		vim.keymap.set({ "n", "v" }, motion, function()
 			return move(motion)
